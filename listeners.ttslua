@@ -1,5 +1,4 @@
 function onSave()
-
   local save = deepcopy(state)
   local json = JSON.encode({
     state = save

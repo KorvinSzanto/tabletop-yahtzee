@@ -1,5 +1,3 @@
-
-
 function rejectDice1(o, color) rejectDice(1, color) end
 function rejectDice2(o, color) rejectDice(2, color) end
 function rejectDice3(o, color) rejectDice(3, color) end

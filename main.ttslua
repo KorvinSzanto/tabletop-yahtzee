@@ -35,7 +35,6 @@ state = {
 }
 surfaceHeight = 2.3
 
-
 local canReset = true
 function resetButtonPress(o, color)
   if Player[color].admin ~= true then
