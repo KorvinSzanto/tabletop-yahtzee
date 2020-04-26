@@ -57,6 +57,9 @@ end
 function reset()
   state.turn.color = nil
   state.turn.rolls = 0
+
+  -- Reset all dice explicitly
+  state.keep = {false,false,false,false,false}
   state.round = 0
   loadItems()
   loadPlayers()
@@ -199,9 +202,9 @@ function lockScore(field, color, value)
       broadcastToAll(Player[color].steam_name .. " took a " .. value .. " for " .. fieldNames[field] .."", Table)
     end
 
-    each(state.dice, function(dice, idx)
-      state.keep[idx] = false
-    end)
+    -- Reset all dice explicitly
+    state.keep = {false,false,false,false,false}
+
     state.lastColor = state.turn.color
     state.turn.color = nil
     state.turn.rolls = 0
@@ -305,7 +308,10 @@ local multiplierMap = {
 }
 
 function RealScore(player, field, round, forceZero)
-  local result = state.players[player].scores[round][field]
+  local result
+  if state.players[player] ~= nil then
+    result = state.players[player].scores[round][field]
+  end
   local multiplier = multiplierMap[field]
 
   if round < state.round then

@@ -22,7 +22,7 @@ function onLoad(save)
 
     local playerCount = 0
     each(data.state.players, function() playerCount = playerCount + 1 end)
-    
+
     if data.state.test == state.test and playerCount > 0 then
       state = data.state
       Redraw()
