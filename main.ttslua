@@ -1,0 +1,497 @@
+--  require('testrunner/tests')
+require('yahtzee/helpers')
+require('yahtzee/listeners')
+require('yahtzee/draw')
+require('yahtzee/dice')
+require('yahtzee/config')
+
+state = {
+  release = true,
+  test = test,
+  host = nil,
+  hideRoll = false,
+  players = {},
+  playerCount = 0,
+  round = 0,
+  bags = {
+    dice = nil,
+    cards = nil,
+  },
+  dice = {},
+  keep = {
+    false,
+    false,
+    false,
+    false,
+    false,
+  },
+  turn = {
+    color = nil,
+    rolls = 0
+  },
+  lastColor = nil,
+  rolling = false,
+  positioner = nil,
+}
+surfaceHeight = 2.3
+
+
+local canReset = true
+function resetButtonPress(o, color)
+  if Player[color].admin ~= true then
+    broadcastToColor('Only the host can restart the game!', color, colors.red)
+    return nil
+  end
+  if state.rolling == true then
+    broadcastToColor("You can't reset while rolling!", color, colors.red)
+    return nil
+  end
+  if canReset == false then
+    return nil
+  end
+
+  canReset = false
+  Wait.time(function() canReset = true end, 1)
+  reset()
+end
+
+function reset()
+  state.turn.color = nil
+  state.turn.rolls = 0
+  state.round = 0
+  loadItems()
+  loadPlayers()
+
+  Redraw()
+  Start()
+end
+
+function loadItems()
+  state.bags.dice = getObjectFromGUID(diceBag)
+  state.bags.cards = getObjectFromGUID(roundBag)
+
+  state.bags.dice.setColorTint('Brown')
+  state.bags.cards.setColorTint('Brown')
+
+  loadDice()
+end
+
+function loadDice()
+  -- Delete existing dice
+  destroyObjectsByTag('Dice')
+
+  -- load in more dice
+  local idx = 1
+  while idx < 6 do
+    local i = idx
+    defer(function()
+      state.dice[i] = state.bags.dice.takeObject({
+        position = dicePosition(i),
+        rotation = {45, 45, 45},
+        smooth = false,
+        callback_function = function(obj)
+          obj.interactable = false
+          obj.setLock(true)
+        end
+      })
+    end)
+    idx = idx + 1
+  end
+end
+
+function loadPlayers()
+  -- Delete existing dice
+  destroyObjectsByName('custom_board')
+
+  state.players = {}
+  state.playerCount = 0
+
+  for i, player in ipairs(getSeatedPlayers()) do
+    if (Player[player].admin == true) then
+      state.host = player
+    end
+
+    state.playerCount = state.playerCount + 1
+    local scorePosition = getCardPosition(player)
+    local scoreRotation = {
+      0,
+      normalizeRotation(180 + Player[player].getHandTransform().rotation.y),
+      0,
+    }
+
+    state.players[player] = {
+      rolls = 0,
+      scores = {},
+      scoreCard = state.bags.cards.takeObject({
+        scale = 1,
+        position = scorePosition,
+        rotation = scoreRotation,
+        smooth = false,
+        callback_function = function(obj)
+          obj.interactable = false
+          obj.setLock(true)
+          obj.setName('Scorecard')
+          obj.setPosition(scorePosition)
+          obj.setRotation(scoreRotation)
+        end
+      })
+    }
+
+    whenResting(state.players[player].scoreCard, function()
+      state.players[player].scoreCard.setLock(true)
+    end)
+
+    state.players[player].scoreCard.setColorTint(player)
+
+    for i=1,6 do
+      state.players[player].scores[i] = {
+        aces = nil,
+        twos = nil,
+        threes = nil,
+        fours = nil,
+        fives = nil,
+        sixes = nil,
+        threeOfKind = nil,
+        fourOfKind = nil,
+        fullHouse = nil,
+        smallStraight = nil,
+        largeStraight = nil,
+        yahtzee = nil,
+      }
+    end
+  end
+end
+
+function getCardPosition(color)
+  local transform = Player[color].getHandTransform()
+  local position = transform.position
+  local rotation = transform.rotation
+  local offset = 8.5
+  rotation.y = normalizeRotation(rotation.y)
+  position.y = 1.52
+
+  if rotation.y == 0 then
+    position.z = position.z + offset
+  elseif rotation.y == 90 then
+    position.x = position.x + offset
+  elseif rotation.y == 180 then
+    position.z = position.z - offset
+  elseif rotation.y == 270 then
+    position.x = position.x - offset
+  end
+
+  return position
+end
+
+function lockScore(field, color, value)
+  if (state.turn.rolls == 0) then
+    return
+  end
+
+  if color == state.turn.color then
+
+    if value > 0 then
+      if field == 'yahtzee' and value > 50 then
+        broadcastToAll(Player[color].steam_name .. " scored ANOTHER 100 for " .. fieldNames[field] .."", Table)
+      else
+        broadcastToAll(Player[color].steam_name .. " scored " .. value .. " for " .. fieldNames[field] .."", Table)
+      end
+    else
+      broadcastToAll(Player[color].steam_name .. " took a " .. value .. " for " .. fieldNames[field] .."", Table)
+    end
+
+    each(state.dice, function(dice, idx)
+      state.keep[idx] = false
+    end)
+    state.lastColor = state.turn.color
+    state.turn.color = nil
+    state.turn.rolls = 0
+    state.players[color].scores[state.round][field] = value
+
+    gatherDice()
+    Redraw()
+
+    if hasRemainingTurns() == false then
+      defer(function()
+        local winners = determineWinner()
+
+        if (winners[2] ~= nil) then
+          broadcastToAll('We have a tie!')
+        else
+          broadcastToAll(Player[winners[1]].steam_name .. ' has won round ' .. state.round .. '!', winners[1])
+        end
+
+        state.round = state.round + 1
+        for color, player in pairs(state.players) do
+          player.rolls = 0
+        end
+
+      end)
+    elseif Turns.enable == true then
+      state.turn.color = Turns.getNextTurnColor()
+      Turns.turn_color = state.turn.color
+    end
+  end
+end
+
+function acesFieldLock(o, color) lockScore('aces', color, diceMatching(1)) end
+function twosFieldLock(o, color) lockScore('twos', color, diceMatching(2)) end
+function threesFieldLock(o, color) lockScore('threes', color, diceMatching(3)) end
+function foursFieldLock(o, color) lockScore('fours', color, diceMatching(4)) end
+function fivesFieldLock(o, color) lockScore('fives', color, diceMatching(5)) end
+function sixesFieldLock(o, color) lockScore('sixes', color, diceMatching(6)) end
+
+function threeOfKindFieldLock(o, color) lockScore('threeOfKind', color, threeOfKindScore()) end
+function fourOfKindFieldLock(o, color) lockScore('fourOfKind', color, fourOfKindScore()) end
+function fullHouseFieldLock(o, color) lockScore('fullHouse', color, fullHouseScore()) end
+function smallStraightFieldLock(o, color) lockScore('smallStraight', color, smallStraightScore()) end
+function largeStraightFieldLock(o, color) lockScore('largeStraight', color, largeStraightScore()) end
+function yahtzeeFieldLock(o, color) lockScore('yahtzee', color, yahtzeeScore()) end
+function chanceFieldLock(o, color) lockScore('chance', color, diceTotal()) end
+
+function topTotal(color, round)
+  return RealScore(color, 'aces', round, true) +
+    RealScore(color, 'twos', round, true) +
+    RealScore(color, 'threes', round, true) +
+    RealScore(color, 'fours', round, true) +
+    RealScore(color, 'fives', round, true) +
+    RealScore(color, 'sixes', round, true)
+end
+
+function bottomTotal(color, round)
+  return RealScore(color, 'threeOfKind', round, true) +
+    RealScore(color, 'fourOfKind', round, true) +
+    RealScore(color, 'fullHouse', round, true) +
+    RealScore(color, 'smallStraight', round, true) +
+    RealScore(color, 'largeStraight', round, true) +
+    RealScore(color, 'yahtzee', round, true) +
+    RealScore(color, 'chance', round, true)
+end
+
+function total(color, round)
+  local topTotal = topTotal(color, round)
+  if topTotal > 62 then
+    topTotal = topTotal + 35
+  end
+  return topTotal + bottomTotal(color, round)
+end
+
+function Host()
+  return player(state.host)
+end
+
+function Score(player, field, round)
+  local result = state.players[player].scores[round][field]
+  if round < state.round and result == nil then
+    return 0
+  end
+
+  return result
+end
+
+local multiplierMap = {
+  aces = 1,
+  twos = 2,
+  threes = 3,
+  fours = 4,
+  fives = 5,
+  sixes = 6,
+  bonus = nil,
+  threeOfKind = nil,
+  fourOfKind = nil,
+  fullHouse = nil,
+  smallStraight = nil,
+  largeStraight = nil,
+  yahtzee = nil,
+}
+
+function RealScore(player, field, round, forceZero)
+  local result = state.players[player].scores[round][field]
+  local multiplier = multiplierMap[field]
+
+  if round < state.round then
+    forceZero = true
+  end
+
+  if (result ~= nil and multiplier ~= nil) then
+    result = result * multiplier
+  end
+
+  if forceZero and result == nil then
+    return 0
+  end
+
+  return result
+end
+
+function Round()
+  return state.round
+end
+
+function Start(o, color)
+  state.round = 1
+
+  local allPlayers = {}
+  local count = 0
+  for idx, color in pairs(getSeatedPlayers()) do
+    allPlayers[#allPlayers + 1] = color
+    count = count + 1
+  end
+
+  if count > 1 then
+    local randomPlayer = allPlayers[math.random(#allPlayers)]
+    state.turn.color = randomPlayer
+    Turns.turn_color = randomPlayer
+    broadcastToAll('Randomly selected ' .. Player[randomPlayer].steam_name .. ' to go first', randomPlayer)
+    if Turns.enable == false then
+      Turns.enable = true
+    end
+  end
+  Redraw()
+end
+
+function acesScore() return diceMatching(1) end
+function twosScore() return diceMatching(2) * 2 end
+function threesScore() return diceMatching(3) * 3 end
+function foursScore() return diceMatching(4) * 4 end
+function fivesScore() return diceMatching(5) * 5 end
+function sixesScore() return diceMatching(6) * 6 end
+
+function threeOfKindScore()
+  for i,amount in pairs(dicePairs()) do
+    if (amount > 2) then return diceTotal() end
+  end
+
+  return isJoker() and diceTotal() or 0
+end
+
+function fourOfKindScore()
+  for i,amount in pairs(dicePairs()) do
+    if (amount > 3) then return diceTotal() end
+  end
+
+  return isJoker() and diceTotal() or 0
+end
+
+function fullHouseScore()
+  hasFull = false
+  hasHouse = false
+  for i,amount in pairs(dicePairs()) do
+    if (amount == 2) then hasFull = true end
+    if (amount == 3) then hasHouse = true end
+  end
+
+  return hasFull and hasHouse and 25 or isJoker() and 25 or 0
+end
+
+function smallStraightScore()
+  local function hasSmallStraight()
+    local pairs = dicePairs()
+    return pairs[1] > 0 and pairs[2] > 0 and pairs[3] > 0 and pairs[4] > 0 or
+      pairs[2] > 0 and pairs[3] > 0 and pairs[4] > 0 and pairs[5] > 0 or
+      pairs[3] > 0 and pairs[4] > 0 and pairs[5] > 0 and pairs[6] > 0
+  end
+
+  return hasSmallStraight() and 30 or isJoker() and 30 or 0
+end
+
+function largeStraightScore()
+  local function hasLargeStraight()
+    local pairs = dicePairs()
+    return pairs[1] == 1 and pairs[2] == 1 and pairs[3] == 1 and pairs[4] == 1 and pairs[5] == 1 or
+      pairs[2] == 1 and pairs[3] == 1 and pairs[4] == 1 and pairs[5] == 1 and pairs[6] == 1
+  end
+
+  return hasLargeStraight() and 40 or isJoker() and 40 or 0
+end
+
+function isJoker()
+  if state.turn.color == nil or RealScore(state.turn.color, 'yahtzee', state.round) ~= 0 then
+    return false
+  end
+
+  local yahtzee = false
+  local value = nil
+  for i,amount in ipairs(dicePairs()) do
+    if (amount == 5) then
+      yahtzee = true
+      value = i
+    end
+  end
+
+  local map = {'aces', 'twos', 'threes', 'fours', 'fives', 'sixes'}
+  if yahtzee == true and RealScore(state.turn.color, map[value], state.round) ~= nil then
+    return true
+  end
+
+  return false
+end
+
+function zeroize(value)
+  return value == nil and 0 or value
+end
+
+function yahtzeeScore()
+  local currentScore = 0
+
+  if state.turn.color then
+    currentScore = RealScore(state.turn.color, 'yahtzee', state.round)
+  end
+
+  if (zeroize(currentScore) > 0 or currentScore == nil) then
+    currentScore = zeroize(currentScore)
+    for i,amount in ipairs(dicePairs()) do
+      if (amount == 5) then return currentScore > 0 and currentScore + 100 or 50 end
+    end
+  end
+
+  if currentScore == nil then
+    return 0
+  end
+
+  return currentScore
+end
+
+function chanceScore()
+  return diceTotal()
+end
+
+function determineWinner()
+  local winners = {}
+  local score = -1
+
+  for color, player in pairs(state.players) do
+    local topTotal = topTotal(color, state.round)
+    local realTotal = topTotal + (topTotal > 62 and 35 or 0)
+    local bottomTotal = bottomTotal(color, state.round)
+    local totalScore = realTotal + bottomTotal
+
+    if score < totalScore then
+      score = totalScore
+      winners = {}
+      table.insert(winners, color)
+    elseif score == totalScore then
+      table.insert(winners, color)
+    end
+  end
+
+  return winners
+end
+
+
+function hasRemainingTurns()
+  local turns = 0
+  for color, player in pairs(state.players) do
+    if player.rolls < 13 then
+      return true
+    end
+  end
+
+  return false
+end
+
+function broadcastYahtzee()
+  times5(function()
+    broadcastToAll('Yahtzee!!!', state.turn.color)
+  end)
+end

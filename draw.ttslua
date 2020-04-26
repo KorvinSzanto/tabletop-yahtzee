@@ -1,0 +1,257 @@
+function drawScoreCards()
+  for i, color in ipairs(getSeatedPlayers()) do
+    if state.players[color] ~= nil then
+      drawCompletedRounds(state.players[color], color)
+      drawCurrentRound(state.players[color], color)
+    end
+  end
+end
+
+function drawCurrentRound(player, color)
+  if state.rolling or state.turn.color ~= color or state.turn.rolls == 0 then return end
+  local card = player.scoreCard
+  local i = state.round
+  local rowDistance = 0.63
+  local round = player.scores[i]
+  local buttonColor = i < state.round and {0.7, 0.7, 0.7} or {0.5, 0.5, 1}
+
+  currentRoundLockButton(card, round, 'aces', 0, buttonColor)
+  currentRoundLockButton(card, round, 'twos', rowDistance, buttonColor)
+  currentRoundLockButton(card, round, 'threes', rowDistance * 2, buttonColor)
+  currentRoundLockButton(card, round, 'fours', rowDistance * 3, buttonColor)
+  currentRoundLockButton(card, round, 'fives', rowDistance * 4, buttonColor)
+  currentRoundLockButton(card, round, 'sixes', rowDistance * 5, buttonColor)
+
+  local top = 0.05
+  local rowDistance = 0.62
+  currentRoundLockButton(card, round, 'threeOfKind', top + rowDistance * 10, buttonColor)
+  currentRoundLockButton(card, round, 'fourOfKind', top + rowDistance * 11, buttonColor)
+  currentRoundLockButton(card, round, 'fullHouse', top + rowDistance * 12, buttonColor)
+  currentRoundLockButton(card, round, 'smallStraight', top + rowDistance * 13, buttonColor)
+  currentRoundLockButton(card, round, 'largeStraight', top + rowDistance * 14, buttonColor)
+  currentRoundLockButton(card, round, 'yahtzee', top + rowDistance * 15, buttonColor)
+  currentRoundLockButton(card, round, 'chance', top + rowDistance * 16, buttonColor)
+end
+
+function currentRoundLockButton(card, round, name, x, color)
+  local value = _G[name .. 'Score']()
+  if ((round[name] == nil or (name == 'yahtzee' and value ~= round[name])) and value > 0) then
+    lockScoreButton(card, name .. 'FieldLock', value, x, state.round, {0.5, 1, 0.5})
+  elseif round[name] == nil and value == 0 then
+    lockScoreButton(card, name .. 'FieldLock', value, x, state.round, {1, 0.5, 0.5})
+  end
+end
+
+function RewriteNotes()
+  local notes = {}
+  if state.round == 0 then
+    return nil
+  end
+
+  for color, player in pairs(state.players) do
+    local total = topTotal(color, state.round)
+    local bonus = total > 62 and 35 or 0
+    local bottom = bottomTotal(color, state.round)
+    local round = total + bonus + bottom
+    local hex = hexMap[color]
+    local name = Player[color] and Player[color].steam_name or color
+
+    table.insert(notes, '[' .. hex .. ']' .. name ..
+      '[aaaaaa]: Top([' .. hex .. ']' .. total ..
+      '[aaaaaa])\nBonus([' .. hex .. ']' .. bonus ..
+      '[aaaaaa])\nBottom([' .. hex .. ']' .. bottom ..
+      '[aaaaaa])\nTotal([' .. hex .. ']' .. round ..
+      '[aaaaaa])')
+  end
+
+  setNotes(table.concat(notes, "\n\n"))
+end
+
+function drawCompletedRounds(player, color)
+  local card = player.scoreCard
+  local bounds = player.scoreCard.getBounds()
+
+  -- Draw name first
+  scoreButton(card, Player[color].steam_name, -2.12, 5, nil, function(data)
+    data.width = 2200
+    data.click_function = 'noop'
+    return data
+  end)
+
+  local i = 1
+  while i <= state.round do
+    local round = player.scores[i]
+    local rowDistance = 0.63
+    local buttonColor = i == state.round and {1, 1, 1} or {1,1,1, 0.75}
+    local totalButtonColor = i == state.round and {0.95, 1, 0.95} or {0.95, 1, 0.95, 0.75}
+
+    -- Top
+    if i < state.round or round['aces'] ~= nil then scoreButton(card, RealScore(color, 'aces', i), 0, i, buttonColor) end
+    if i < state.round or round['twos'] ~= nil then scoreButton(card, RealScore(color, 'twos', i), rowDistance, i, buttonColor) end
+    if i < state.round or round['threes'] ~= nil then scoreButton(card, RealScore(color, 'threes', i), rowDistance * 2, i, buttonColor) end
+    if i < state.round or round['fours'] ~= nil then scoreButton(card, RealScore(color, 'fours', i), rowDistance * 3, i, buttonColor) end
+    if i < state.round or round['fives'] ~= nil then scoreButton(card, RealScore(color, 'fives', i), rowDistance * 4, i, buttonColor) end
+    if i < state.round or round['sixes'] ~= nil then scoreButton(card, RealScore(color, 'sixes', i), rowDistance * 5, i, buttonColor) end
+
+    local topTotal = topTotal(color, i)
+    scoreButton(card, topTotal, rowDistance * 6, i, totalButtonColor)
+    scoreButton(card, topTotal > 62 and 'Yes' or 'No', rowDistance * 6 + 0.55, i, topTotal > 62 and colors.green or totalButtonColor)
+
+    local realTotal = topTotal + (topTotal > 62 and 35 or 0)
+    scoreButton(card, realTotal, rowDistance * 7 + 0.45, i, totalButtonColor)
+
+    -- Bottom
+    top = 0.05
+    local rowDistance = 0.62
+    local hasYahtzee = state.turn.rolls > 0 and yahtzeeScore() ~= RealScore(color, 'yahtzee', i)
+    if i < state.round or round['threeOfKind'] ~= nil then scoreButton(card, RealScore(color, 'threeOfKind', i), top + rowDistance * 10, i, buttonColor) end
+    if i < state.round or round['fourOfKind'] ~= nil then scoreButton(card, RealScore(color, 'fourOfKind', i), top + rowDistance * 11, i, buttonColor) end
+    if i < state.round or round['fullHouse'] ~= nil then scoreButton(card, RealScore(color, 'fullHouse', i), top + rowDistance * 12, i, buttonColor) end
+    if i < state.round or round['smallStraight'] ~= nil then scoreButton(card, RealScore(color, 'smallStraight', i), top + rowDistance * 13, i, buttonColor) end
+    if i < state.round or round['largeStraight'] ~= nil then scoreButton(card, RealScore(color, 'largeStraight', i), top + rowDistance * 14, i, buttonColor) end
+
+    if hasYahtzee == false or state.turn.color ~= color then
+      if i < state.round or round['yahtzee'] ~= nil then scoreButton(card, RealScore(color, 'yahtzee', i), top + rowDistance * 15, i, buttonColor) end
+    end
+    if i < state.round or round['chance'] ~= nil then scoreButton(card, RealScore(color, 'chance', i), top + rowDistance * 16, i, buttonColor) end
+
+    local bottomTotal = bottomTotal(color, i)
+    scoreButton(card, bottomTotal, top + rowDistance * 17, i, buttonColor)
+    scoreButton(card, realTotal, top + rowDistance * 18, i, buttonColor)
+    scoreButton(card, realTotal + bottomTotal, top + rowDistance * 19, i, buttonColor)
+
+    i = i + 1
+  end
+end
+
+function Redraw()
+  self.clearButtons()
+  self.clearInputs()
+  RewriteNotes()
+
+  for i, obj in pairs(state.bags) do
+    obj.clearButtons()
+    obj.clearInputs()
+  end
+
+  for i, obj in ipairs(state.dice) do
+    obj.clearButtons()
+    obj.clearInputs()
+  end
+
+  for i, player in pairs(state.players) do
+    player.scoreCard.clearButtons()
+    player.scoreCard.clearInputs()
+  end
+
+  local bagPosition = getObjectFromGUID(roundBag).getBounds()
+
+  if state.rolling == false then
+    state.bags.cards.createButton({
+      click_function = 'resetButtonPress',
+      function_owner = self,
+      label = 'Restart Game',
+      width = 1000,
+      height = 1000,
+      position = {0, 0.1, -3},
+      rotation = {0, 180, 0},
+      color = colors.red
+    })
+  end
+  if state.round > 0 and state.round < 7 then
+    drawScoreCards()
+
+    if state.turn.rolls < 3 and state.hideRoll == false and state.rolling == false then
+      local next = Turns.enable == true and Player[Turns.turn_color].steam_name .. "'s turn\nClick to Roll" or 'Next Turn'
+      state.bags.dice.createButton({
+        click_function = 'rollDice',
+        function_owner = self,
+        label          = state.turn.rolls == 0 and next or state.turn.rolls < 3 and 'Roll #' .. (state.turn.rolls + 1),
+        position       = relativeVector(state.bags.dice, vector(10, 1.5, 0)),
+        scale          = { 2, 0, 2 },
+        width          = 1000,
+        height         = 300,
+        color          = Turns.enable and Turns.turn_color or colors.green,
+      })
+    end
+
+    if state.rolling == false and state.turn.rolls > 0 then
+      each(state.dice, function(dice, idx)
+        if state.keep[idx] == false then
+          local bounds = dice.getBounds()
+          local r = dice.getRotation()
+          local p = dicePosition(idx)
+          state.bags.dice.createButton({
+            click_function = 'lockDice' .. idx,
+            function_owner = self,
+            label          = 'Keep',
+            position       = relativeVector(state.bags.dice, vector((idx - 3) * 3, 1.5, -2)),
+            scale          = { 2, 0, 2 },
+            width          = 300,
+            height         = 300,
+            color          = toPerc{ 17, 17, 17 },
+            font_color     = {1,1,1}
+          })
+        end
+      end)
+
+      if state.turn.rolls < 3 then
+        each(state.keep, function(keep, idx)
+          if keep == true then
+            local dice = state.dice[idx]
+            local bounds = dice.getBounds()
+            local r = dice.getRotation()
+            local p = dicePosition(idx)
+
+            state.bags.dice.createButton({
+              click_function = 'rejectDice' .. idx,
+              function_owner = self,
+              label          = 'Give Back',
+              position       = relativeVector(state.bags.dice, vector((idx - 3) * 3, 1.5, 0)),
+              scale          = { 2, 0, 2 },
+              width          = 500,
+              height         = 300,
+              color          = colors.red,
+            })
+          end
+        end)
+      end
+    end
+  end
+end
+
+function scoreButton(card, title, y, round, color, callback)
+  local pos = {-1.35 + ((round - 1) * 1.702), 0.6, -4 + y}
+  local config = {
+    click_function = 'noop',
+    function_owner = self,
+    label          = title,
+    position       = pos,
+    width          = 830,
+    height         = 200,
+    color          = color ~= nil and color or 'White',
+    hover_color    = color ~= nil and color or 'White',
+    press_color    = color ~= nil and color or 'White',
+  }
+
+  if (callback ~= nil) then
+    config = callback(config)
+  end
+
+  card.createButton(config)
+end
+
+
+function lockScoreButton(card, onclick, title, y, round, color, callback)
+  return scoreButton(card, title, y, round, color, function(data)
+    if round == state.round then
+      data.click_function = onclick
+    end
+
+    if callback ~= nil then
+      return callback(data)
+    end
+
+    return data
+  end)
+end

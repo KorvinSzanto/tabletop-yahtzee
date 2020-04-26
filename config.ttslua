@@ -1,0 +1,47 @@
+-- Enable to run tests
+test = false
+
+colors = {
+  red = toPerc{255, 65, 54},
+  green = toPerc{46, 204, 64},
+  blue = toPerc{0, 116, 217},
+  yellow = toPerc{255, 220, 0}
+}
+
+singleplayerColor = 'Orange'
+
+-- Set up variables
+diceBag = '6322ef'
+roundBag = 'b415e0'
+state = {}
+
+availableSeats = {
+  'White','Purple','Red','Blue','Yellow','Green','Pink','Orange'
+}
+
+hexMap = {
+  White = 'ffffff',
+  Purple = 'B10DC9',
+  Red = 'FF4136',
+  Blue = '0074D9',
+  Yellow = 'FFDC00',
+  Green = '2ECC40',
+  Pink = 'F012BE',
+  Orange = 'FF851B'
+}
+
+fieldNames = {
+  aces = 'ones',
+  twos = 'twos',
+  threes = 'threes',
+  fours = 'fours',
+  fives = 'fives',
+  sixes = 'sixes',
+  threeOfKind = 'three of a kind',
+  fourOfKind = 'four of a kind',
+  fullHouse = 'full house',
+  smallStraight = 'small straight',
+  largeStraight = 'large straight',
+  yahtzee = 'yahtzee',
+  chance = 'chance'
+}

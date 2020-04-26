@@ -1,0 +1,112 @@
+function onSave()
+
+  local save = deepcopy(state)
+  local json = JSON.encode({
+    state = save
+  })
+
+  return json
+end
+
+function onLoad(save)
+  setNotes('')
+  if test and _tests.run ~= nil then
+    _tests.run()
+  end
+
+  if save ~= nil and string.len(save) > 2 then
+    local data = JSON.decode(save)
+
+    inflate(data.state)
+
+    local playerCount = 0
+    each(data.state.players, function() playerCount = playerCount + 1 end)
+
+    if data.state.test == state.test and playerCount > 0 then
+      state = data.state
+      lockObjects()
+      Redraw()
+    else
+      reset()
+    end
+  else
+    reset()
+  end
+end
+
+function onPlayerChangeColor(player_color)
+  local playerCount = 0
+  each(state.players, function() playerCount = playerCount + 1 end)
+  if playerCount == 0 then
+    reset()
+  end
+end
+
+function onObjectRandomize(object, color)
+  if state.rolling then
+    return
+  end
+
+  if isDice(object) then
+    state.rolling = true
+    if state.turn.color ~= color then
+      state.turn.color = color
+      state.turn.roll = 0
+    end
+    Redraw()
+    whenDiceResting(function()
+      state.rolling = false
+      state.hideRoll = true
+      Redraw()
+      gatherDice()
+      whenDiceResting(function()
+        state.hideRoll = false
+        if isJoker() then
+          times5(function()
+            broadcastToAll('Joker!!', state.turn.color)
+          end)
+        end
+        if yahtzeeScore() > RealScore(state.turn.color, 'yahtzee', state.round, true) then
+          broadcastYahtzee()
+        end
+
+        each(state.keep, function(keep, idx)
+          if (keep == false) then
+            state.dice[idx].setLock(true)
+          end
+        end)
+        if state.turn.rolls == 3 then
+          each(state.keep, function(keep, idx)
+            if (keep == false) then
+              lockDice(idx, state.turn.color)
+            end
+          end)
+        end
+        Redraw()
+      end)
+    end)
+  end
+end
+
+function onPlayerTurn()
+  local playerCount = 0
+  local lastColor = nil
+  for idx, color in pairs(getSeatedPlayers()) do
+    playerCount = playerCount + 1
+    lastColor = color
+  end
+  if playerCount == 1 then
+    Turns.enable = false
+    Turns.turn_color = nil
+    return
+  end
+
+  local shouldBe = state.turn.color
+  if shouldBe ~= nil and Turns.turn_color ~= shouldBe then
+    defer(function()
+      Turns.turn_color = shouldBe
+    end)
+    return
+  end
+  Redraw()
+end

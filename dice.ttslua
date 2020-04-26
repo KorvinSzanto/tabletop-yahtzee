@@ -1,0 +1,127 @@
+
+
+function rejectDice1(o, color) rejectDice(1, color) end
+function rejectDice2(o, color) rejectDice(2, color) end
+function rejectDice3(o, color) rejectDice(3, color) end
+function rejectDice4(o, color) rejectDice(4, color) end
+function rejectDice5(o, color) rejectDice(5, color) end
+function rejectDice6(o, color) rejectDice(6, color) end
+
+function rejectDice(idx, color)
+  if (state.turn.color ~= color) then
+    return
+  end
+  state.keep[idx] = false
+  Redraw()
+  state.dice[idx].setPositionSmooth(dicePosition(idx), false, true)
+end
+
+function lockDice1(o, color) lockDice(1, color) end
+function lockDice2(o, color) lockDice(2, color) end
+function lockDice3(o, color) lockDice(3, color) end
+function lockDice4(o, color) lockDice(4, color) end
+function lockDice5(o, color) lockDice(5, color) end
+function lockDice6(o, color) lockDice(6, color) end
+
+function lockDice(idx, color)
+  if (state.turn.color ~= color) then
+    return
+  end
+
+  local newPosition = dicePosition(idx)
+  state.keep[idx] = true
+  state.dice[idx].setLock(true)
+  Redraw()
+  newPosition.z = newPosition.z + 3
+  state.dice[idx].setPositionSmooth(newPosition, false, true)
+end
+
+function rollDice(o, color)
+  if Turns.enable == true and color ~= Turns.turn_color then
+    return
+  end
+
+  if color == state.lastPlayer and state.playerCount > 1 then
+    return
+  end
+
+  if state.turn.rolls == 0 then
+    statePlayer(color).rolls = statePlayer(color).rolls + 1
+  end
+
+  state.turn.rolls = state.turn.rolls + 1
+  each(state.dice, function(dice, idx)
+    if state.keep[idx] == false then
+
+      -- This dance is needed to make rolling work for some reason
+      dice.interactable = true
+      dice.setLock(false)
+      dice.interactable = false
+
+      defer(function()
+        times5(function()
+          dice.roll()
+        end)
+      end)
+    end
+  end)
+  onObjectRandomize(state.dice[1], color)
+end
+
+function diceValues()
+  local result = {}
+  for i, dice in ipairs(state.dice) do
+    table.insert(result, dice.getRotationValue())
+  end
+  return result
+end
+
+function diceTotal()
+  local dice = 0
+  for i, face in ipairs(diceValues()) do
+    dice = dice + face
+  end
+  return dice
+end
+
+function diceMatching(value)
+  local dice = 0
+  for i, face in ipairs(diceValues()) do
+    if face == value then dice = dice + 1 end
+  end
+  return dice
+end
+
+function dicePairs()
+  local dice = {0,0,0,0,0,0}
+  for i, face in ipairs(diceValues()) do
+    dice[face] = dice[face] + 1
+  end
+
+  return dice
+end
+
+function isDice(obj)
+  for i, dice in ipairs(state.dice) do
+    if (dice.guid == obj.guid) then
+      return true
+    end
+  end
+  return false
+end
+
+function dicePosition(idx)
+  local shift = idx - 3
+  return vector(shift * 3, state.turn.rolls == 0 and surfaceHeight + 0.5 or surfaceHeight, 0)
+end
+
+function gatherDice()
+  for idx, dice in ipairs(state.dice) do
+    if state.keep[idx] == false then
+      dice.setPositionSmooth(dicePosition(idx), false, true)
+
+      local r = dice.getRotation()
+      dice.setRotationSmooth(state.turn.rolls == 0 and {45, 45, 45} or {r.x, 0, r.z}, true, true)
+    end
+  end
+end

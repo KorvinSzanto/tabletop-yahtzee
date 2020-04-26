@@ -1,0 +1,189 @@
+-- Prepare to declare tests
+_tests = _tests ~= nil and _tests or {}
+
+function toPerc(table) for i, val in pairs(table) do table[i] = val / 255 end return table end
+
+function deepcopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in next, orig, nil do
+            copy[deepcopy(orig_key)] = deepcopy(orig_value)
+        end
+        setmetatable(copy, deepcopy(getmetatable(orig)))
+    else -- number, string, boolean, etc
+      if type(orig) == 'userdata' and orig.guid ~= nil then
+        copy = 'GUID::' .. orig.guid
+      else
+        copy = orig
+      end
+    end
+    return copy
+end
+
+function inflate(table)
+  for key, value in next, table, nil do
+    local valueType = type(value)
+    if valueType == 'string' and string.find(value, 'GUID::') ~= 0 then
+      table[key] = getObjectFromGUID(string.sub(value, 7))
+    elseif valueType == 'table' then
+      inflate(value)
+    end
+  end
+end
+
+function destroyObjectsByTag(tag)
+  tag = string.lower(tag)
+  for i, obj in ipairs(getAllObjects()) do
+    if string.lower(obj.tag) == tag then
+      destroyObject(obj)
+    end
+  end
+end
+
+function destroyObjectsByName(tag)
+  tag = string.lower(tag)
+  for i, obj in ipairs(getAllObjects()) do
+    if string.lower(obj.name) == tag then
+      destroyObject(obj)
+    end
+  end
+end
+
+function relativeVector(bag, position)
+  local realPosition = bag.positionToLocal(position)
+  realPosition.x = -1 * realPosition.x
+  return realPosition
+end
+
+_tests.testRelativeVector = function()
+  local testBag = { positionToLocal = function(position) return vector(10, 5, 3) end }
+
+  _tests.assertEquals(vector(-10, 5, 3), relativeVector(testBag, vector(1, 1, 1)))
+end
+
+function noop() end
+
+-- Iterate over a table with a callback function
+-- callback function(val, index)
+function each(table, callback)
+  for i, o in pairs(table) do
+    callback(o, i)
+  end
+end
+
+_tests.testEachIteratesArray = function()
+  local count = 0
+  local last = nil
+  each({'a','b','c','d','e'}, function(val, index)
+    count = count + 1
+    last = val
+    lastIndex = index
+  end)
+  _tests.assertEquals(5, count)
+  _tests.assertEquals(5, lastIndex)
+  _tests.assertEquals('e', last)
+end
+
+_tests.testEachIteratesAssociative = function()
+  local count = 0
+  local last = nil
+  each({foo = 'a', baz = 'b', bar = 'c'}, function(val, index)
+    count = count + 1
+    last = val
+    lastIndex = index
+  end)
+  _tests.assertEquals(3, count)
+  _tests.assertEquals('bar', lastIndex)
+  _tests.assertEquals('c', last)
+end
+
+function defer(callback)
+  deferFunc(callback)()
+end
+
+function deferFunc(callback)
+  return function() Wait.frames(callback, 10) end
+end
+
+function whenResting(obj, callback)
+  defer(function() Wait.condition(deferFunc(callback), function() return obj.resting end) end)
+end
+
+function whenDiceResting(callback)
+  defer(function() Wait.condition(deferFunc(callback), function()
+    return state.dice[1].resting and state.dice[2].resting and
+      state.dice[3].resting and state.dice[4].resting and
+      state.dice[5].resting
+  end) end)
+end
+
+function times5(callback)
+  callback()
+  local frames = 30
+  Wait.frames(function()
+    callback()
+    Wait.frames(function()
+      callback()
+      Wait.frames(function()
+        callback()
+        Wait.frames(function()
+          callback()
+        end, frames)
+      end, frames)
+    end, frames)
+  end, frames)
+end
+
+function normalizeRotation(degrees, snapAngle)
+  if snapAngle == nil then
+    snapAngle = 90
+  end
+
+  return (math.floor(degrees / snapAngle + 0.5) * snapAngle) % 360
+end
+
+_tests.testNormalizeRotation = function()
+  _tests.assert(function() return normalizeRotation(1) == 0 end)
+  _tests.assert(function() return normalizeRotation(46) == 90 end)
+  _tests.assert(function() return normalizeRotation(91) == 90 end)
+  _tests.assert(function() return normalizeRotation(185) == 180 end)
+  _tests.assert(function() return normalizeRotation(361) == 0 end)
+  _tests.assert(function() return normalizeRotation(300) == 270 end)
+  _tests.assert(function() return normalizeRotation(320) == 0 end)
+end
+
+function lockObjects()
+  each(getAllObjects(), function(obj)
+      obj.setLock(true)
+      obj.interactable = false
+      local rotation = obj.getRotation()
+      obj.setRotation({
+        normalizeRotation(rotation.x, 45),
+        normalizeRotation(rotation.y, 45),
+        normalizeRotation(rotation.z, 45),
+      })
+  end)
+end
+
+function statePlayer(color)
+  local realPlayer = state.players[color]
+
+  if realPlayer == nil then
+    return {
+      scores = {
+        {},
+        {},
+        {},
+        {},
+        {},
+        {},
+        {}
+      },
+      rolls = 0
+    }
+  end
+
+  return realPlayer
+end
