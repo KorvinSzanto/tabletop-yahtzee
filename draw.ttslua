@@ -57,10 +57,10 @@ function RewriteNotes()
     local name = Player[color] and Player[color].steam_name or color
 
     table.insert(notes, '[' .. hex .. ']' .. name ..
-      '[aaaaaa]: Top([' .. hex .. ']' .. total ..
+      '[aaaaaa]: Upper([' .. hex .. ']' .. total ..
       '[aaaaaa])\nBonus([' .. hex .. ']' .. bonus ..
-      '[aaaaaa])\nBottom([' .. hex .. ']' .. bottom ..
-      '[aaaaaa])\nTotal([' .. hex .. ']' .. round ..
+      '[aaaaaa])\nLower([' .. hex .. ']' .. bottom ..
+      '[aaaaaa])\nGrand Total([' .. hex .. ']' .. round ..
       '[aaaaaa])')
   end
 
