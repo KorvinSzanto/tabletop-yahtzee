@@ -13,6 +13,8 @@ function onLoad(save)
     _tests.run()
   end
 
+
+  lockObjects()
   if save ~= nil and string.len(save) > 2 then
     local data = JSON.decode(save)
 
@@ -20,10 +22,9 @@ function onLoad(save)
 
     local playerCount = 0
     each(data.state.players, function() playerCount = playerCount + 1 end)
-
+    
     if data.state.test == state.test and playerCount > 0 then
       state = data.state
-      lockObjects()
       Redraw()
     else
       reset()
