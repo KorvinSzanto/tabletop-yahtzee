@@ -9,10 +9,10 @@ end
 
 function onLoad(save)
   setNotes('')
+
   if test and _tests.run ~= nil then
     _tests.run()
   end
-
 
   lockObjects()
   if save ~= nil and string.len(save) > 2 then
@@ -21,16 +21,31 @@ function onLoad(save)
     inflate(data.state)
 
     local playerCount = 0
-    each(data.state.players, function() playerCount = playerCount + 1 end)
+    ieach(data.state.players, function() playerCount = playerCount + 1 end)
 
     if data.state.test == state.test and playerCount > 0 then
       state = data.state
+
+      local players = 0
+      for color, player in pairs(state.players) do
+        if player.scoreCard == nil then
+          state.players[color] = nil
+        else
+          players = players + 1
+        end
+      end
+
+      if players == 0 then
+        return reset()
+      end
       Redraw()
     else
-      reset()
+
+    broadcastToAll('drawing')
+      return reset()
     end
   else
-    reset()
+    return reset()
   end
 end
 
@@ -40,6 +55,13 @@ function onPlayerChangeColor(player_color)
   if playerCount == 0 then
     reset()
   end
+end
+
+function getRollIdentifier()
+  if state.turn.color ~= nil and state.players[state.turn.color] ~= nil then
+    return state.turn.color .. ':' .. state.players[state.turn.color].rolls
+  end
+  return 'new game'
 end
 
 function onObjectRandomize(object, color)
@@ -53,14 +75,24 @@ function onObjectRandomize(object, color)
       state.turn.color = color
       state.turn.roll = 0
     end
+    local rollPlayer = state.turn.color
+    local rolls = state.turn.rolls
     Redraw()
     whenDiceResting(function()
-      state.rolling = false
+      if rollPlayer ~= state.turn.color then
+        return
+      end
+      state.rolling = true
       state.hideRoll = true
       Redraw()
       gatherDice()
       whenDiceResting(function()
+        if rollPlayer ~= state.turn.color then
+          return
+        end
+        normalizeDiceRotation()
         state.hideRoll = false
+        state.rolling = false
         if isJoker() then
           times5(function()
             broadcastToAll('Joker!!', state.turn.color)

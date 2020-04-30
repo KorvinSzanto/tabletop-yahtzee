@@ -57,6 +57,9 @@ end
 function reset()
   state.turn.color = nil
   state.turn.rolls = 0
+  state.players = {}
+  state.bags = {}
+  state.dice = {}
 
   -- Reset all dice explicitly
   state.keep = {false,false,false,false,false}
@@ -89,7 +92,7 @@ function loadDice()
     defer(function()
       state.dice[i] = state.bags.dice.takeObject({
         position = dicePosition(i),
-        rotation = {45, 45, 45},
+        rotation = {45, 0, 45},
         smooth = false,
         callback_function = function(obj)
           obj.interactable = false
@@ -124,26 +127,23 @@ function loadPlayers()
     state.players[player] = {
       rolls = 0,
       scores = {},
-      scoreCard = state.bags.cards.takeObject({
-        scale = 1,
-        position = scorePosition,
-        rotation = scoreRotation,
-        smooth = false,
-        callback_function = function(obj)
-          obj.interactable = false
-          obj.setLock(true)
-          obj.setName('Scorecard')
-          obj.setPosition(scorePosition)
-          obj.setRotation(scoreRotation)
-        end
-      })
     }
 
-    whenResting(state.players[player].scoreCard, function()
-      state.players[player].scoreCard.setLock(true)
-    end)
+    state.players[player].scoreCard = state.bags.cards.takeObject({
+      scale = 1,
+      position = scorePosition,
+      rotation = scoreRotation,
+      smooth = false,
+      callback_function = function(obj)
+        obj.interactable = false
+        obj.setLock(true)
+        obj.setName('Scorecard')
+        obj.setPosition(scorePosition)
+        obj.setRotation(scoreRotation)
+        obj.setColorTint(player)
+      end
+    })
 
-    state.players[player].scoreCard.setColorTint(player)
 
     for i=1,6 do
       state.players[player].scores[i] = {

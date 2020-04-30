@@ -2,10 +2,23 @@
 test = false
 
 colors = {
-  red = toPerc{255, 65, 54},
-  green = toPerc{46, 204, 64},
-  blue = toPerc{0, 116, 217},
-  yellow = toPerc{255, 220, 0}
+  navy = Color.fromHex('001F3F'),
+  blue = Color.fromHex('0074D9'),
+  aqua = Color.fromHex('7FDBFF'),
+  teal = Color.fromHex('39CCCC'),
+  olive = Color.fromHex('3D9970'),
+  green = Color.fromHex('2ECC40'),
+  lime = Color.fromHex('01FF70'),
+  yellow = Color.fromHex('FFDC00'),
+  orange = Color.fromHex('FF851B'),
+  red = Color.fromHex('FF4136'),
+  fuchsia = Color.fromHex('F012BE'),
+  purple = Color.fromHex('B10DC9'),
+  maroon = Color.fromHex('85144B'),
+  white = Color.fromHex('FFFFFF'),
+  silver = Color.fromHex('DDDDDD'),
+  gray = Color.fromHex('AAAAAA'),
+  black = Color.fromHex('111111'),
 }
 
 singleplayerColor = 'Orange'

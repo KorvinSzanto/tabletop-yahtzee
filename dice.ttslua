@@ -55,10 +55,16 @@ function rollDice(o, color)
       dice.interactable = true
       dice.setLock(false)
       dice.interactable = false
+      local torqueLimit = 5000
 
       defer(function()
         times5(function()
           dice.roll()
+        end, function()
+          dice.addTorque({
+            math.random(-1 * torqueLimit, torqueLimit),
+            math.random(-1 * torqueLimit, torqueLimit),
+            math.random(-1 * torqueLimit, torqueLimit)}, 1)
         end)
       end)
     end
@@ -119,7 +125,15 @@ function gatherDice()
       dice.setPositionSmooth(dicePosition(idx), false, true)
 
       local r = dice.getRotation()
-      dice.setRotationSmooth(state.turn.rolls == 0 and {45, 45, 45} or {r.x, 0, r.z}, true, true)
+      dice.setRotationSmooth(state.turn.rolls == 0 and {45, 0, 45} or {r.x, 0, r.z}, true, true)
     end
   end
+end
+
+function normalizeDiceRotation()
+  local rotationValues = state.dice[1].getRotationValues()
+  each(state.dice, function(dice)
+    local expectedRotation = rotationValues[dice.getRotationValue()]
+    dice.setRotationSmooth(expectedRotation.rotation, true, true)
+  end)
 end

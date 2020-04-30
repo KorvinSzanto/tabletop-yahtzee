@@ -1,7 +1,13 @@
 -- Prepare to declare tests
 _tests = _tests ~= nil and _tests or {}
 
-function toPerc(table) for i, val in pairs(table) do table[i] = val / 255 end return table end
+function Color.fromHex(hexColor)
+    local rStr, gStr, bStr = hexColor:match('#?(%x%x)(%x%x)(%x%x)')
+    assert(rStr and gStr and bStr, tostring(hexColor) .. ' is not a valid color hex string')
+    return Color(tonumber(rStr, 16)/255, tonumber(gStr, 16)/255, tonumber(bStr, 16)/255)
+end
+
+function toPerc(table) if type(table) == 'number' then return table / 255 end for i, val in pairs(table) do table[i] = val / 255 end return table end
 
 function deepcopy(orig)
     local orig_type = type(orig)
@@ -72,6 +78,11 @@ function each(table, callback)
     callback(o, i)
   end
 end
+function ieach(table, callback)
+  for i, o in ipairs(table) do
+    callback(o, i)
+  end
+end
 
 _tests.testEachIteratesArray = function()
   local count = 0
@@ -119,7 +130,7 @@ function whenDiceResting(callback)
   end) end)
 end
 
-function times5(callback)
+function times5(callback, thenCallback)
   callback()
   local frames = 30
   Wait.frames(function()
@@ -130,6 +141,9 @@ function times5(callback)
         callback()
         Wait.frames(function()
           callback()
+          if thenCallback ~= nil then
+            defer(thenCallback)
+          end
         end, frames)
       end, frames)
     end, frames)
