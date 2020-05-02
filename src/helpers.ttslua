@@ -1,6 +1,15 @@
 -- Prepare to declare tests
 _tests = _tests ~= nil and _tests or {}
 
+function reset()
+  state = defaultState()
+  loadItems()
+  loadPlayers()
+
+  Redraw()
+  Start()
+end
+
 function Color.fromHex(hexColor)
     local rStr, gStr, bStr = hexColor:match('#?(%x%x)(%x%x)(%x%x)')
     assert(rStr and gStr and bStr, tostring(hexColor) .. ' is not a valid color hex string')
@@ -200,4 +209,209 @@ function statePlayer(color)
   end
 
   return realPlayer
+end
+
+function Round()
+  return state.round
+end
+
+function Host()
+  return player(state.host)
+end
+
+function zeroize(value)
+  return value == nil and 0 or value
+end
+
+function getCardPosition(color)
+  local transform = Player[color].getHandTransform()
+  local position = transform.position
+  local rotation = transform.rotation
+  local offset = 8.5
+  rotation.y = normalizeRotation(rotation.y)
+  position.y = 1.52
+
+  if rotation.y == 0 then
+    position.z = position.z + offset
+  elseif rotation.y == 90 then
+    position.x = position.x + offset
+  elseif rotation.y == 180 then
+    position.z = position.z - offset
+  elseif rotation.y == 270 then
+    position.x = position.x - offset
+  end
+
+  return position
+end
+
+function determineWinner()
+  local winners = {}
+  local score = -1
+
+  for color, player in pairs(state.players) do
+    local topTotal = topTotal(color, state.round)
+    local realTotal = topTotal + (topTotal > 62 and 35 or 0)
+    local bottomTotal = bottomTotal(color, state.round)
+    local totalScore = realTotal + bottomTotal
+
+    if score < totalScore then
+      score = totalScore
+      winners = {}
+      table.insert(winners, color)
+    elseif score == totalScore then
+      table.insert(winners, color)
+    end
+  end
+
+  return winners
+end
+
+function hasRemainingTurns()
+  local turns = 0
+  for color, player in pairs(state.players) do
+    if player.rolls < 13 then
+      return true
+    end
+  end
+
+  return false
+end
+
+function broadcastYahtzee()
+  times5(function()
+    broadcastToAll('Yahtzee!!!', state.turn.color)
+  end)
+end
+
+local canReset = true
+function resetButtonPress(o, color)
+  if Player[color].admin ~= true then
+    broadcastToColor('Only the host can restart the game!', color, colors.red)
+    return nil
+  end
+  if state.rolling == true then
+    broadcastToColor("You can't reset while rolling!", color, colors.red)
+    return nil
+  end
+  if canReset == false then
+    return nil
+  end
+
+  canReset = false
+  Wait.time(function() canReset = true end, 1)
+  reset()
+end
+
+function loadItems()
+  state.bags.dice = getObjectFromGUID(diceBag)
+  state.bags.cards = getObjectFromGUID(roundBag)
+
+  state.bags.dice.setColorTint('Brown')
+  state.bags.cards.setColorTint('Brown')
+
+  loadDice()
+end
+
+function loadDice()
+  -- Delete existing dice
+  destroyObjectsByTag('Dice')
+
+  -- load in more dice
+  local idx = 1
+  while idx < 6 do
+    local i = idx
+    defer(function()
+      state.dice[i] = state.bags.dice.takeObject({
+        position = dicePosition(i),
+        rotation = {45, 0, 45},
+        smooth = false,
+        callback_function = function(obj)
+          obj.interactable = false
+          obj.setLock(true)
+        end
+      })
+    end)
+    idx = idx + 1
+  end
+end
+
+function loadPlayers()
+  -- Delete existing dice
+  destroyObjectsByName('custom_board')
+
+  state.players = {}
+  state.playerCount = 0
+
+  for i, player in ipairs(getSeatedPlayers()) do
+    if (Player[player].admin == true) then
+      state.host = player
+    end
+
+    state.playerCount = state.playerCount + 1
+    local scorePosition = getCardPosition(player)
+    local scoreRotation = {
+      0,
+      normalizeRotation(180 + Player[player].getHandTransform().rotation.y),
+      0,
+    }
+
+    state.players[player] = {
+      rolls = 0,
+      scores = {},
+    }
+
+    state.players[player].scoreCard = state.bags.cards.takeObject({
+      scale = 1,
+      position = scorePosition,
+      rotation = scoreRotation,
+      smooth = false,
+      callback_function = function(obj)
+        obj.interactable = false
+        obj.setLock(true)
+        obj.setName('Scorecard')
+        obj.setPosition(scorePosition)
+        obj.setRotation(scoreRotation)
+        obj.setColorTint(player)
+      end
+    })
+
+    for i=1,6 do
+      state.players[player].scores[i] = {
+        aces = nil,
+        twos = nil,
+        threes = nil,
+        fours = nil,
+        fives = nil,
+        sixes = nil,
+        threeOfKind = nil,
+        fourOfKind = nil,
+        fullHouse = nil,
+        smallStraight = nil,
+        largeStraight = nil,
+        yahtzee = nil,
+      }
+    end
+  end
+end
+
+function Start(o, color)
+  state.round = 1
+
+  local allPlayers = {}
+  local count = 0
+  for idx, color in pairs(getSeatedPlayers()) do
+    allPlayers[#allPlayers + 1] = color
+    count = count + 1
+  end
+
+  if count > 1 then
+    local randomPlayer = allPlayers[math.random(#allPlayers)]
+    state.turn.color = randomPlayer
+    Turns.turn_color = randomPlayer
+    broadcastToAll('Randomly selected ' .. Player[randomPlayer].steam_name .. ' to go first', randomPlayer)
+    if Turns.enable == false then
+      Turns.enable = true
+    end
+  end
+  Redraw()
 end

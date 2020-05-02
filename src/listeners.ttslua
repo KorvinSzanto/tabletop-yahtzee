@@ -26,6 +26,10 @@ function onLoad(save)
     if data.state.test == state.test and playerCount > 0 then
       state = data.state
 
+      if state.theme == nil then
+        state.theme = 'firstTry'
+      end
+
       local players = 0
       for color, player in pairs(state.players) do
         if player.scoreCard == nil then
@@ -40,8 +44,6 @@ function onLoad(save)
       end
       Redraw()
     else
-
-    broadcastToAll('drawing')
       return reset()
     end
   else

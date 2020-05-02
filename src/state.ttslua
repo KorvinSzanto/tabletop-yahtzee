@@ -1,0 +1,36 @@
+
+-- Declare global state
+defaultState = function()
+  return {
+    theme = 'firstTry',
+    release = true,
+    test = test,
+    host = nil,
+    hideRoll = false,
+    players = {},
+    playerCount = 0,
+    round = 0,
+    bags = {
+      dice = nil,
+      cards = nil,
+    },
+    dice = {},
+    keep = {
+      false,
+      false,
+      false,
+      false,
+      false,
+    },
+    turn = {
+      color = nil,
+      rolls = 0
+    },
+    lastColor = nil,
+    rolling = false,
+    positioner = nil,
+  }
+end
+
+state = defaultState()
+surfaceHeight = 2.3
